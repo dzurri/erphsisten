@@ -67,87 +67,216 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
     return { pdf, base64 };
   };
 
-  const saveAndTriggerDownload = (pdf: jsPDF, filename: string) => {
+  const openPrintWindow = () => {
+    // 1. Open new window synchronously inside user click event to bypass PWA/Chrome popup blocker
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      // Fallback directly to native window.print() if new window creation is blocked by strict PWA policy
+      try {
+        window.print();
+      } catch (e) {
+        console.error("Direct print fallback failed:", e);
+      }
+      return;
+    }
+
+    // Show initial loading indicator in new window
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Menjana Halaman Cetak...</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #0f172a; }
+            .box { text-align: center; padding: 30px; background: white; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+            .spin { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <div class="spin"></div>
+            <h3 style="margin:0 0 8px; font-size:18px;">Menyediakan Halaman Cetakan RPH...</h3>
+            <p style="margin:0; color:#64748b; font-size:14px;">Dialog cetak Chrome akan muncul secara automatik.</p>
+          </div>
+        </body>
+      </html>
+    `);
+
+    setTimeout(() => {
+      if (!printRef.current) return;
+
+      // Extract all parent stylesheets so Tailwind and Google Fonts render accurately
+      const stylesHtml = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map(style => style.outerHTML)
+        .join('\n');
+
+      const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
+      const weekNum = erphs[0]?.week || 1;
+
+      printWin.document.open();
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Cetak RPH Minggu ${weekNum} - ${teacherName}</title>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            ${stylesHtml}
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 5mm;
+              }
+              *, *::before, *::after {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              body {
+                background: #f1f5f9 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                font-family: system-ui, -apple-system, sans-serif;
+              }
+              .a4-page {
+                width: 210mm !important;
+                min-height: 295mm !important;
+                margin: 20px auto !important;
+                padding: 10mm !important;
+                background: white !important;
+                box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important;
+                border: 1px solid #cbd5e1 !important;
+                page-break-after: always !important;
+                break-after: page !important;
+              }
+              @media print {
+                .no-print {
+                  display: none !important;
+                }
+                body {
+                  background: white !important;
+                }
+                .a4-page {
+                  margin: 0 !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  padding: 0 !important;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="no-print" style="position: sticky; top: 0; background: #0f172a; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 99999;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em;">🖨️ Cetakan RPH Minggu ${weekNum}</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <button onclick="window.print()" style="background: #2563eb; color: white; border: none; padding: 10px 20px; font-weight: 800; border-radius: 8px; cursor: pointer; font-size: 12px; text-transform: uppercase;">
+                  🖨️ CETAK / SIMPAN PDF
+                </button>
+                <button onclick="window.close()" style="background: #334155; color: white; border: none; padding: 10px 16px; font-weight: 700; border-radius: 8px; cursor: pointer; font-size: 12px; text-transform: uppercase;">
+                  TUTUP TAB
+                </button>
+              </div>
+            </div>
+            <div style="padding: 10px 0;">
+              ${printRef.current.innerHTML}
+            </div>
+            <script>
+              setTimeout(() => {
+                window.print();
+              }, 500);
+            </script>
+          </body>
+        </html>
+      `);
+      printWin.document.close();
+    }, 150);
+  };
+
+  const openPDFWindow = async () => {
+    // 1. Open new window synchronously inside user click event to bypass PWA/Chrome popup blocker
+    const pdfWin = window.open('', '_blank');
+    if (!pdfWin) {
+      // Fallback: Generate PDF and trigger direct download
+      try {
+        setIsPrinting(true);
+        const { pdf } = await generateJsPDF();
+        const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
+        const weekNum = erphs[0]?.week || 1;
+        pdf.save(`RPH_Minggu_${weekNum}_${teacherName}.pdf`);
+      } catch (e) {
+        window.print();
+      } finally {
+        setIsPrinting(false);
+      }
+      return;
+    }
+
+    // Show loading state in new window
+    pdfWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Menjana Fail PDF...</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #0f172a; }
+            .box { text-align: center; padding: 30px; background: white; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+            .spin { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+          </style>
+        </head>
+        <body>
+          <div class="box">
+            <div class="spin"></div>
+            <h3 style="margin:0 0 8px; font-size:18px;">Sedang Menjana Fail PDF RPH...</h3>
+            <p style="margin:0; color:#64748b; font-size:14px;">Halaman PDF akan dipaparkan dalam beberapa saat.</p>
+          </div>
+        </body>
+      </html>
+    `);
+
     try {
+      setIsPrinting(true);
+      const { pdf } = await generateJsPDF();
+      const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
+      const weekNum = erphs[0]?.week || 1;
+      const filename = `RPH_Minggu_${weekNum}_${teacherName}.pdf`;
+
+      // Trigger standard browser download
+      try {
+        pdf.save(filename);
+      } catch (saveErr) {
+        console.warn("Direct pdf.save failed:", saveErr);
+      }
+
+      // Create PDF Blob URL
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.style.display = 'none';
-      link.href = blobUrl;
-      link.download = filename;
-      link.setAttribute('download', filename);
-      
-      document.body.appendChild(link);
-      link.click();
 
-      setTimeout(() => {
-        if (document.body.contains(link)) {
-          document.body.removeChild(link);
-        }
-        URL.revokeObjectURL(blobUrl);
-      }, 3000);
-    } catch (blobErr) {
-      console.warn("Blob URL download failed, using Data URI fallback:", blobErr);
-      try {
-        const dataUri = pdf.output('datauristring');
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = dataUri;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) {
-            document.body.removeChild(link);
-          }
-        }, 3000);
-      } catch (dataUriErr) {
-        console.warn("Data URI download failed, fallback to jsPDF save:", dataUriErr);
-        pdf.save(filename);
+      // Navigate open window directly to Blob URL so Chrome's native PDF viewer displays it natively
+      if (pdfWin && !pdfWin.closed) {
+        pdfWin.location.href = blobUrl;
       }
+    } catch (err) {
+      console.error("PDF Window Error:", err);
+      alert("Gagal menjana PDF. Sila cuba guna [ CETAK (TAB BARU) ].");
+      if (pdfWin && !pdfWin.closed) {
+        pdfWin.close();
+      }
+    } finally {
+      setIsPrinting(false);
     }
   };
 
   const handlePrint = async () => {
-    setIsPrinting(true);
-    try {
-      // 1. Trigger native browser print dialog
-      try {
-        window.print();
-      } catch (err) {
-        console.warn("Direct window.print error in standalone/PWA mode:", err);
-      }
-
-      // 2. In standalone PWA mode, also generate & download PDF automatically
-      // so teachers get a printable PDF even if window.print is restricted by standalone window frame
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-      if (isStandalone) {
-        const { pdf } = await generateJsPDF();
-        const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
-        const weekNum = erphs[0]?.week || 1;
-        saveAndTriggerDownload(pdf, `RPH_Minggu_${weekNum}_${teacherName}.pdf`);
-      }
-    } catch (err) {
-      console.error("Print handle error:", err);
-    } finally {
-      setIsPrinting(false);
-    }
+    // Synchronously open dedicated print tab (foolproof in Chrome PWA Standalone & Mobile)
+    openPrintWindow();
   };
 
   const handleDownloadPDF = async () => {
-    setIsPrinting(true);
-    try {
-      const { pdf } = await generateJsPDF();
-      const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
-      const weekNum = erphs[0]?.week || 1;
-      saveAndTriggerDownload(pdf, `RPH_Minggu_${weekNum}_${teacherName}.pdf`);
-    } catch (err) {
-      console.error("Download Error:", err);
-      alert("Gagal memuat turun PDF. Sila cuba lagi.");
-    } finally {
-      setIsPrinting(false);
-    }
+    // Synchronously open dedicated PDF view/download tab
+    openPDFWindow();
   };
 
   const generatePDFBase64 = async (): Promise<string> => {
@@ -411,26 +540,25 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
     <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-fadeIn print:static print:inset-auto print:z-auto print:p-0 print:bg-transparent print:block print:overflow-visible">
       <div className="bg-white w-full max-w-5xl h-full rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/20 print:static print:w-full print:max-w-none print:h-auto print:rounded-none print:shadow-none print:border-none print:overflow-visible print:block">
         {/* Header */}
-        <div className="p-6 md:p-8 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10 print:hidden">
+        <div className="p-4 sm:p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-white sticky top-0 z-10 print:hidden">
           <button 
             type="button"
             onClick={onBack}
-            className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold text-xs uppercase transition-all"
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-bold text-xs uppercase transition-all self-start sm:self-auto"
           >
             <ChevronLeft size={18} /> KEMBALI
           </button>
           
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full sm:w-auto justify-end">
             <button 
               type="button"
               onClick={handleDownloadPDF}
               disabled={isPrinting || isGenerating}
-              className="flex items-center gap-1.5 md:gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 md:px-5 py-2.5 md:py-3 rounded-xl font-black text-[10px] uppercase transition-all border border-slate-200 active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Muat turun fail PDF RPH ini"
+              className="flex items-center gap-1.5 md:gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 md:px-5 py-2.5 md:py-3 rounded-xl font-black text-[10px] uppercase transition-all border border-slate-200 active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Buka fail PDF RPH di tab Chrome baharu untuk muat turun"
             >
               {isPrinting ? <Loader2 size={16} className="animate-spin text-blue-600" /> : <Download size={16} />}
-              <span className="hidden sm:inline">MUAT TURUN PDF</span>
-              <span className="sm:hidden">PDF</span>
+              <span>MUAT TURUN PDF (TAB BARU)</span>
             </button>
 
             <button 
@@ -438,10 +566,10 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
               onClick={handlePrint}
               disabled={isPrinting || isGenerating}
               className="flex items-center gap-1.5 md:gap-2 bg-slate-900 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-[10px] uppercase hover:bg-slate-800 transition-all shadow-lg active:scale-95 cursor-pointer disabled:opacity-50"
-              title="Cetak RPH ini"
+              title="Buka halaman cetak di tab Chrome baharu"
             >
-              {isPrinting ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
-              {isPrinting ? 'MENJANA...' : 'CETAK'}
+              <Printer size={16} />
+              <span>CETAK (TAB BARU)</span>
             </button>
             
             {onSubmit && (
