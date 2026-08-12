@@ -5,6 +5,7 @@ import { SignaturePadProps } from '../types';
 
 const SignaturePad: React.FC<SignaturePadProps> = ({ onSign, initialValue }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [mode, setMode] = useState<'DRAW' | 'UPLOAD'>('DRAW');
   const [hasSignature, setHasSignature] = useState(!!initialValue);
@@ -190,7 +191,10 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSign, initialValue }) => 
             />
           </div>
         ) : (
-          <div className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] h-[240px] flex flex-col items-center justify-center p-6 text-center transition-all hover:border-blue-400 group relative overflow-hidden">
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white border-2 border-dashed border-slate-200 rounded-[2.5rem] h-[240px] flex flex-col items-center justify-center p-6 text-center transition-all hover:border-blue-400 cursor-pointer group relative overflow-hidden"
+          >
             {uploadedImage ? (
               <div className="relative w-full h-full flex items-center justify-center">
                 <img src={uploadedImage} alt="Tandatangan" className="max-h-full object-contain mix-blend-multiply" />
@@ -201,13 +205,14 @@ const SignaturePad: React.FC<SignaturePadProps> = ({ onSign, initialValue }) => 
             ) : (
               <>
                 <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl mb-3"><ImageIcon size={32}/></div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Letakkan fail tandatangan di sini<br/><span className="text-[8px] opacity-60">(PNG atau JPEG sahaja)</span></p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Klik untuk muat naik tandatangan<br/><span className="text-[8px] opacity-60">(PNG atau JPEG sahaja)</span></p>
               </>
             )}
             <input 
+              ref={fileInputRef}
               type="file" 
-              className="absolute inset-0 opacity-0 cursor-pointer" 
-              accept="image/png, image/jpeg" 
+              className="hidden" 
+              accept="image/png,image/jpeg,image/*" 
               onChange={handleFileUpload}
             />
           </div>
