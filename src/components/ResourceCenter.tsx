@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Plus, X, FileText, Link as LinkIcon, ExternalLink, Search, 
   Upload, Trash2, Eye, Filter, ChevronRight, Globe, Lock, User
@@ -32,6 +32,8 @@ const ResourceCenter: React.FC<ResourceCenterProps> = ({ viewId, label, resource
   const [fileExt, setFileExt] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const filteredResources = useMemo(() => {
     // Deduplicate resources to prevent key errors
     const uniqueResources = Array.from(new Map(resources.map(r => [r.id, r])).values());
@@ -46,15 +48,27 @@ const ResourceCenter: React.FC<ResourceCenterProps> = ({ viewId, label, resource
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file size (Max 15MB)
+      if (file.size > 15 * 1024 * 1024) {
+        alert('Saiz fail terlalu besar (Maksimum 15MB). Sila pilih fail yang lebih kecil atau kongsi Pautan Google Drive.');
+        e.target.value = '';
+        return;
+      }
+
+      setIsUploading(true);
       const reader = new FileReader();
-      reader.onloadstart = () => setIsUploading(true);
-      reader.onloadend = () => {
+      reader.onload = () => {
         const base64 = reader.result as string;
         setFileData(base64);
         setFileName(file.name);
         const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
         setFileExt(ext);
         if (!newName) setNewName(file.name.split('.')[0]);
+        setIsUploading(false);
+      };
+      reader.onerror = (err) => {
+        console.error("FileReader Error:", err);
+        alert("Gagal membaca fail. Sila cuba lagi.");
         setIsUploading(false);
       };
       reader.readAsDataURL(file);
@@ -230,34 +244,42 @@ const ResourceCenter: React.FC<ResourceCenterProps> = ({ viewId, label, resource
 
                 {newType === 'FILE' ? (
                   <div className="space-y-4">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Pilih Fail</label>
-                    <div className="relative group">
-                      <div className={`border-2 border-dashed rounded-3xl p-10 flex flex-col items-center justify-center text-center transition-all ${fileData ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 hover:border-blue-300 bg-slate-50/50'}`}>
-                        {isUploading ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Memproses...</p>
-                          </div>
-                        ) : fileData ? (
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg"><FileText size={32}/></div>
-                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest truncate max-w-[200px]">{fileName}</p>
-                            <button type="button" onClick={() => setFileData('')} className="text-[8px] font-bold text-red-500 uppercase hover:underline">Padam</button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="p-4 bg-white text-slate-400 rounded-2xl shadow-sm mb-4 group-hover:scale-110 transition-transform"><Upload size={32}/></div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Klik atau seret fail di sini<br/><span className="text-[8px] opacity-60">(PDF, XLSX, PNG, JPG)</span></p>
-                          </>
-                        )}
-                      </div>
-                      <input 
-                        type="file" 
-                        onChange={handleFileChange}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg"
-                      />
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Pilih Fail (PDF / Excel / Gambar)</label>
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-3xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${fileData ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 hover:border-blue-300 bg-slate-50/50'}`}
+                    >
+                      {isUploading ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Memproses Fail...</p>
+                        </div>
+                      ) : fileData ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="p-4 bg-emerald-500 text-white rounded-2xl shadow-lg"><FileText size={32}/></div>
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest truncate max-w-[200px]">{fileName}</p>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); setFileData(''); setFileName(''); }} 
+                            className="text-[8px] font-bold text-red-500 uppercase hover:underline"
+                          >
+                            Tukar Fail
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="p-4 bg-white text-slate-400 rounded-2xl shadow-sm mb-3 group-hover:scale-110 transition-transform"><Upload size={32}/></div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">Klik untuk pilih & muat naik fail<br/><span className="text-[8px] opacity-60">(PDF, XLSX, PNG, JPG)</span></p>
+                        </>
+                      )}
                     </div>
+                    <input 
+                      ref={fileInputRef}
+                      type="file" 
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.xlsx,.xls,image/png,image/jpeg,.png,.jpg,.jpeg,image/*"
+                    />
                   </div>
                 ) : (
                   <div>
