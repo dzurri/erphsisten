@@ -254,9 +254,50 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
 
-      // Navigate open window directly to Blob URL so Chrome's native PDF viewer displays it natively
+      // Write full HTML page into opened window with embedded PDF object and controls (prevents ERR_BLOCKED_BY_CLIENT)
       if (pdfWin && !pdfWin.closed) {
-        pdfWin.location.href = blobUrl;
+        pdfWin.document.open();
+        pdfWin.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${filename}</title>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <style>
+                body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f172a; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+                .header { background: #0f172a; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1e293b; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 10; flex-wrap: wrap; gap: 10px; }
+                .title { font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #f8fafc; }
+                .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+                .btn-download { background: #2563eb; color: white; text-decoration: none; padding: 10px 18px; font-weight: 800; border-radius: 8px; font-size: 12px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px; }
+                .btn-download:hover { background: #1d4ed8; }
+                .btn-print { background: #334155; color: white; border: none; padding: 10px 16px; font-weight: 700; border-radius: 8px; cursor: pointer; font-size: 12px; text-transform: uppercase; }
+                .btn-close { background: #1e293b; color: #94a3b8; border: 1px solid #334155; padding: 10px 14px; font-weight: 700; border-radius: 8px; cursor: pointer; font-size: 12px; text-transform: uppercase; }
+                .pdf-container { flex: 1; width: 100%; height: calc(100vh - 60px); border: none; background: #525659; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="title">📄 FAIL PDF: ${filename}</div>
+                <div class="btn-group">
+                  <a href="${blobUrl}" download="${filename}" class="btn-download">
+                    ⬇️ MUAT TURUN FAIL PDF
+                  </a>
+                  <button onclick="window.print()" class="btn-print">
+                    🖨️ CETAK
+                  </button>
+                  <button onclick="window.close()" class="btn-close">
+                    TUTUP TAB
+                  </button>
+                </div>
+              </div>
+              <object class="pdf-container" data="${blobUrl}" type="application/pdf">
+                <iframe class="pdf-container" src="${blobUrl}"></iframe>
+              </object>
+            </body>
+          </html>
+        `);
+        pdfWin.document.close();
       }
     } catch (err) {
       console.error("PDF Window Error:", err);
