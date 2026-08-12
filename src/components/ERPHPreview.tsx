@@ -67,11 +67,71 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
     return { pdf, base64 };
   };
 
-  const handlePrint = () => {
+  const saveAndTriggerDownload = (pdf: jsPDF, filename: string) => {
     try {
-      window.print();
+      const blob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = blobUrl;
+      link.download = filename;
+      link.setAttribute('download', filename);
+      
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(() => {
+        if (document.body.contains(link)) {
+          document.body.removeChild(link);
+        }
+        URL.revokeObjectURL(blobUrl);
+      }, 3000);
+    } catch (blobErr) {
+      console.warn("Blob URL download failed, using Data URI fallback:", blobErr);
+      try {
+        const dataUri = pdf.output('datauristring');
+        const link = document.createElement('a');
+        link.style.display = 'none';
+        link.href = dataUri;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (document.body.contains(link)) {
+            document.body.removeChild(link);
+          }
+        }, 3000);
+      } catch (dataUriErr) {
+        console.warn("Data URI download failed, fallback to jsPDF save:", dataUriErr);
+        pdf.save(filename);
+      }
+    }
+  };
+
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      // 1. Trigger native browser print dialog
+      try {
+        window.print();
+      } catch (err) {
+        console.warn("Direct window.print error in standalone/PWA mode:", err);
+      }
+
+      // 2. In standalone PWA mode, also generate & download PDF automatically
+      // so teachers get a printable PDF even if window.print is restricted by standalone window frame
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+      if (isStandalone) {
+        const { pdf } = await generateJsPDF();
+        const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
+        const weekNum = erphs[0]?.week || 1;
+        saveAndTriggerDownload(pdf, `RPH_Minggu_${weekNum}_${teacherName}.pdf`);
+      }
     } catch (err) {
-      console.error("Gagal memanggil dialog cetak:", err);
+      console.error("Print handle error:", err);
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -81,7 +141,7 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
       const { pdf } = await generateJsPDF();
       const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
       const weekNum = erphs[0]?.week || 1;
-      pdf.save(`RPH_Minggu_${weekNum}_${teacherName}.pdf`);
+      saveAndTriggerDownload(pdf, `RPH_Minggu_${weekNum}_${teacherName}.pdf`);
     } catch (err) {
       console.error("Download Error:", err);
       alert("Gagal memuat turun PDF. Sila cuba lagi.");
