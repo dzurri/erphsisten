@@ -67,40 +67,11 @@ const ERPHPreview: React.FC<ERPHPreviewProps> = ({ erphs, onBack, onSubmit, hide
     return { pdf, base64 };
   };
 
-  const handlePrint = async () => {
-    setIsPrinting(true);
+  const handlePrint = () => {
     try {
-      // 1. Trigger native print dialog as primary
-      try {
-        window.print();
-      } catch (err) {
-        console.warn("Direct window.print error:", err);
-      }
-
-      // 2. Generate PDF and save/open in new window as foolproof print fallback
-      const { pdf } = await generateJsPDF();
-      const teacherName = erphs[0]?.teacherName ? erphs[0].teacherName.replace(/[^a-zA-Z0-9]/g, '_') : 'Guru';
-      const weekNum = erphs[0]?.week || 1;
-      const filename = `RPH_Minggu_${weekNum}_${teacherName}.pdf`;
-
-      // Trigger instant PDF download
-      pdf.save(filename);
-
-      // Open Blob URL in tab for print viewing
-      try {
-        const blob = pdf.output('blob');
-        const blobUrl = URL.createObjectURL(blob);
-        const printWin = window.open(blobUrl, '_blank');
-        if (printWin) {
-          printWin.focus();
-        }
-      } catch (e) {
-        console.warn("Could not open new tab:", e);
-      }
+      window.print();
     } catch (err) {
-      console.error("Print error:", err);
-    } finally {
-      setIsPrinting(false);
+      console.error("Gagal memanggil dialog cetak:", err);
     }
   };
 
