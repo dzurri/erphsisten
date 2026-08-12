@@ -147,19 +147,21 @@ const DSKPUploader: React.FC<DSKPUploaderProps> = ({ masterData, onUpdateMasterD
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center hover:bg-slate-50 transition-colors">
+          <div 
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center hover:bg-slate-50 transition-colors cursor-pointer"
+          >
             <input
               type="file"
-              accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+              accept=".csv, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, .xlsx, .xls"
               onChange={handleFileUpload}
               ref={fileInputRef}
               className="hidden"
               id="csv-upload"
               disabled={isUploading}
             />
-            <label 
-              htmlFor="csv-upload"
-              className={`flex flex-col items-center justify-center cursor-pointer ${isUploading ? 'opacity-50' : ''}`}
+            <div 
+              className={`flex flex-col items-center justify-center ${isUploading ? 'opacity-50' : ''}`}
             >
               <div className="w-16 h-16 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center mb-4">
                 {isUploading ? <Loader2 size={32} className="animate-spin" /> : <FileSpreadsheet size={32} />}
@@ -170,7 +172,7 @@ const DSKPUploader: React.FC<DSKPUploaderProps> = ({ masterData, onUpdateMasterD
               <span className="text-xs text-slate-500">
                 Hanya fail berformat .csv, .xlsx, atau .xls dibenarkan
               </span>
-            </label>
+            </div>
           </div>
 
           <div className="border-2 border-slate-200 rounded-3xl p-8 flex flex-col justify-center">
